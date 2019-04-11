@@ -1,5 +1,6 @@
 import java.io.IOException;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.List;
@@ -16,26 +17,46 @@ public class ICcrawler {
     public static final String CSV_SEPARATOR = ",";
     public static final SimpleDateFormat DATE_FORMAT = new SimpleDateFormat("dd.MM.yyyy");
     public static final String INTERCITY_DOMAIN = "https://intercity.by";
+    public static final int PAGE_SIZE = 10;
 
 
-    public List<String> crawl(final String city) throws IOException {
+    public List<String> crawl(final String country) throws IOException {
+        final List<String> result = new ArrayList<>();
+        System.out.println("START LOADING DATA FOR " + country);
         final Date now = new Date();
         final String str_from = DATE_FORMAT.format(now);
         final Calendar instance = Calendar.getInstance();
         instance.add(Calendar.MONTH, 6);
 
         final String str_to = DATE_FORMAT.format(instance.getTime());
-        final Document document = Jsoup.connect(buildUrl(city, str_from, str_to)).get();
+        final Document document = Jsoup.connect(buildUrl(country, str_from, str_to)).get();
 
         final Integer founded_count = new Integer(document.select(".offers_result_h1,count")
                 .text().replaceAll("[^1234567890]", ""));
-
-        final List<String> result = document.select(".offers_el").stream().map(this::getCsvString).collect
-                (Collectors.toList());
+        System.out.println("FOUNDED " + founded_count);
+        result.addAll(document.select(".offers_el").stream().map(this::getCsvString).collect
+                (Collectors.toList()));
 
         //by default 10 per page
-        if(founded_count>10){
-            //TODO hiden results should be included
+        if (founded_count > PAGE_SIZE) {
+            for (int i = 0; i < founded_count / 10; i++) {
+//            for (int i = 0; i < 3; i++) {
+                System.out.println("load page " + i);
+                final Document post = Jsoup.connect(INTERCITY_DOMAIN + "/ajax/offers/filter_page_offers.php")
+                        .data("?", "")
+//                        .data("q[from]", "" + i)
+                        .data("q[city][]", "-1")
+                        .data("q[d_from]", str_from)
+                        .data("q[d_to]", str_to)
+                        .data("q[hotel][]", "-1")
+                        .data("q[country][]", country)
+                        .data("q[p_count]", "" + i)
+                        .post();
+                final List<String> hidenResults = post.select(".offers_el").stream().map(this::getCsvString).collect
+                        (Collectors.toList());
+                result.addAll(hidenResults);
+            }
+
         }
 
         return result;
@@ -56,7 +77,7 @@ public class ICcrawler {
                 "&children=0\"";
     }
 
-    private String getCsvString(final Element element) {
+    public String getCsvString(final Element element) {
         final String offers_price = element.select(".offers_price").text();
         final String offers_detail = element.select(".offers_detail").text();
         final String offers_rating = element.select(".offers_rating").text();
