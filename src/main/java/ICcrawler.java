@@ -1,13 +1,13 @@
 import java.io.IOException;
 import java.text.SimpleDateFormat;
-import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Date;
+import java.util.List;
+import java.util.stream.Collectors;
 
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
-import org.jsoup.select.Elements;
 
 public class ICcrawler {
 
@@ -15,17 +15,34 @@ public class ICcrawler {
     public static final String SEPARATOR = "&q%5";
     public static final String CSV_SEPARATOR = ",";
     public static final SimpleDateFormat DATE_FORMAT = new SimpleDateFormat("dd.MM.yyyy");
+    public static final String INTERCITY_DOMAIN = "https://intercity.by";
 
 
-
-    public ArrayList<String> crawl(final String city) throws IOException {
-        final ArrayList<String> res = new ArrayList<>();
+    public List<String> crawl(final String city) throws IOException {
         final Date now = new Date();
         final String str_from = DATE_FORMAT.format(now);
         final Calendar instance = Calendar.getInstance();
-        instance.add(Calendar.MONTH,6);
+        instance.add(Calendar.MONTH, 6);
+
         final String str_to = DATE_FORMAT.format(instance.getTime());
-        Document document = Jsoup.connect("https://intercity.by/tours/list/country/" + city + "/?" + SEPARATOR +
+        final Document document = Jsoup.connect(buildUrl(city, str_from, str_to)).get();
+
+        final Integer founded_count = new Integer(document.select(".offers_result_h1,count")
+                .text().replaceAll("[^1234567890]", ""));
+
+        final List<String> result = document.select(".offers_el").stream().map(this::getCsvString).collect
+                (Collectors.toList());
+
+        //by default 10 per page
+        if(founded_count>10){
+            //TODO hiden results should be included
+        }
+
+        return result;
+    }
+
+    private String buildUrl(final String city, final String str_from, final String str_to) {
+        return INTERCITY_DOMAIN + "/tours/list/country/" + city + "/?" + SEPARATOR +
                 "Badults%5D=2&q" +
                 "%5Bchild%5D=0" + SEPARATOR +
                 "Bchild_ages%5D=" + SEPARATOR +
@@ -36,11 +53,7 @@ public class ICcrawler {
                 "Bd_from%5D=" + str_from + SEPARATOR +
                 "Bd_to%5D=" + str_to +
                 "&adults=2" +
-                "&children=0\"").get();
-        final Elements select = document.select(".offers_el");
-        select.stream().map(this::getCsvString).forEach(System.out::println);
-
-        return res;
+                "&children=0\"";
     }
 
     private String getCsvString(final Element element) {
@@ -49,7 +62,7 @@ public class ICcrawler {
         final String offers_rating = element.select(".offers_rating").text();
         final String offers_date = element.select(".offers_date").text();
         final String hotel_name = element.select(".offers_name_link").text();
-        final String offers_name_link = element.select(".offers_name_link").attr("href");
+        final String offers_name_link = INTERCITY_DOMAIN + element.select(".offers_name_link").attr("href");
 
         return
                 offers_price + CSV_SEPARATOR +
